@@ -1,0 +1,1665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- iOS Web App / PWA Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="MedTrack">
+    <meta name="theme-color" content="#0d9488">
+    <title>MedTrack — Medicine & Refill Reminder</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for crisp medical & UI icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0fdfa',
+                            100: '#ccfbf1',
+                            500: '#14b8a6',
+                            600: '#0d9488',
+                            700: '#0f766e',
+                            900: '#134e4a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom animations & iOS safe-area refinements */
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            background-color: #f8fafc;
+            padding-bottom: env(safe-area-inset-bottom, 24px);
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+            70% { transform: scale(1); box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .urgent-pulse {
+            animation: pulse-ring 2s infinite;
+        }
+
+        /* Smooth modal backdrop */
+        .modal-backdrop {
+            background-color: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+
+        /* Hide scrollbars cleanly where needed */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased selection:bg-teal-100 selection:text-teal-900">
+
+    <!-- Top Sticky Header -->
+    <header class="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-sm">
+        <div class="max-w-2xl mx-auto px-4 py-3.5 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-teal-500 to-teal-700 text-white flex items-center justify-center shadow-md shadow-teal-500/20">
+                    <i class="fa-solid fa-pills text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-extrabold tracking-tight text-slate-900 leading-tight">MedTrack</h1>
+                    <p class="text-xs font-medium text-slate-500">Smart Stock & Hourly Refill Alerts</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <!-- Notification Permission Status Pill -->
+                <button id="notifHeaderBtn" onclick="requestBrowserNotifications()" class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all border shadow-sm active:scale-95">
+                    <i id="notifHeaderIcon" class="fa-solid fa-bell"></i>
+                    <span id="notifHeaderText">Alerts</span>
+                </button>
+
+                <!-- Settings / Backup Button -->
+                <button onclick="openSettingsModal()" aria-label="Settings and Backup" class="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition active:scale-95">
+                    <i class="fa-solid fa-sliders"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="max-w-2xl mx-auto px-4 pt-4 pb-28 space-y-5">
+
+        <!-- iOS Home Screen Setup Tip Banner (Dismissible, vital for iOS Safari Push Notifications) -->
+        <div id="iosGuideBanner" class="hidden bg-gradient-to-r from-sky-50 to-indigo-50 border border-sky-200 rounded-2xl p-4 shadow-sm relative">
+            <button onclick="dismissIosBanner()" class="absolute top-3 right-3 text-slate-400 hover:text-slate-600 p-1.5" aria-label="Dismiss tip">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="flex items-start gap-3 pr-6">
+                <div class="w-9 h-9 rounded-xl bg-sky-500 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                    <i class="fa-brands fa-apple text-lg"></i>
+                </div>
+                <div class="space-y-1.5">
+                    <h2 class="text-sm font-bold text-slate-900">Enable iPhone Push Notifications</h2>
+                    <p class="text-xs text-slate-600 leading-relaxed">
+                        On iPhone (iOS), Safari requires adding this app to your Home Screen before system notifications can pop up:
+                    </p>
+                    <ol class="text-xs text-slate-700 font-medium space-y-1 pt-0.5">
+                        <li>1. Tap the <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-white border border-slate-200 text-sky-600 font-semibold"><i class="fa-solid fa-arrow-up-from-bracket mr-1"></i>Share</span> button in Safari's toolbar.</li>
+                        <li>2. Scroll down & tap <span class="font-bold text-slate-900">"Add to Home Screen"</span>.</li>
+                        <li>3. Open <span class="font-bold text-teal-700">MedTrack</span> from your Home Screen & tap <span class="font-bold">"Enable Alerts"</span>.</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Low-Stock Persistent Alert Strip (Visible whenever unacknowledged low-stock meds exist) -->
+        <div id="activeAlertStrip" class="hidden bg-red-600 text-white rounded-2xl p-4 shadow-lg shadow-red-600/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0 urgent-pulse">
+                    <i class="fa-solid fa-triangle-exclamation text-lg"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-extrabold uppercase tracking-wider bg-white text-red-600 px-2 py-0.5 rounded-md">Refill Needed</span>
+                        <span id="stripCountdown" class="text-xs font-semibold text-red-100">Next pop-up in 59m 59s</span>
+                    </div>
+                    <p id="stripAlertSummary" class="text-sm font-bold mt-1 leading-snug">1 medicine is running low and needs ordering.</p>
+                </div>
+            </div>
+            <button onclick="showUrgentRefillModal(true)" class="w-full sm:w-auto px-4 py-2.5 bg-white text-red-700 hover:bg-red-50 font-bold text-xs rounded-xl shadow-sm transition active:scale-95 shrink-0">
+                Review & Mark Done
+            </button>
+        </div>
+
+        <!-- Summary Metrics Grid -->
+        <section class="grid grid-cols-3 gap-2.5 sm:gap-3">
+            <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm">
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Medicines</div>
+                <div class="mt-1 flex items-baseline justify-between">
+                    <span id="statTotalMeds" class="text-2xl font-extrabold text-slate-900">0</span>
+                    <i class="fa-solid fa-capsules text-teal-500 text-sm"></i>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm">
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Order Alert</div>
+                <div class="mt-1 flex items-baseline justify-between">
+                    <span id="statLowMeds" class="text-2xl font-extrabold text-slate-900">0</span>
+                    <i id="statLowIcon" class="fa-solid fa-bell-slash text-slate-300 text-sm"></i>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-sm">
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Hourly Timer</div>
+                <div class="mt-1 flex items-baseline justify-between">
+                    <span id="statTimer" class="text-lg sm:text-xl font-extrabold text-slate-700 tabular-nums">--:--</span>
+                    <i class="fa-regular fa-clock text-indigo-500 text-sm"></i>
+                </div>
+            </div>
+        </section>
+
+        <!-- Quick Controls Bar: Auto-Deduct Status + Test Alert + Add Medicine -->
+        <section class="flex flex-wrap items-center justify-between gap-2 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm">
+            <div class="flex items-center gap-2">
+                <button onclick="triggerTestAlert()" class="px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold flex items-center gap-1.5 transition active:scale-95">
+                    <i class="fa-solid fa-vial"></i>
+                    <span>Test Alert</span>
+                </button>
+                <button onclick="openActivityLogModal()" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition active:scale-95">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    <span>History</span>
+                </button>
+            </div>
+
+            <button onclick="openMedicineModal()" class="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-md shadow-teal-600/20 transition active:scale-95 ml-auto">
+                <i class="fa-solid fa-plus"></i>
+                <span>Add Medicine</span>
+            </button>
+        </section>
+
+        <!-- Sample Data Banner (Shown only if sample data is still present) -->
+        <div id="sampleDataBanner" class="hidden bg-teal-50 border border-teal-200 rounded-2xl px-4 py-3 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5 text-xs text-teal-900">
+                <i class="fa-solid fa-sparkles text-teal-600"></i>
+                <span>Sample medicines loaded so you can test low-stock & hourly alerts right away.</span>
+            </div>
+            <button onclick="clearSampleData()" class="px-3 py-1.5 rounded-xl bg-white border border-teal-200 text-teal-800 hover:bg-teal-100 text-xs font-bold shrink-0 transition">
+                Clear Samples
+            </button>
+        </div>
+
+        <!-- Medicine Cards List -->
+        <section id="medicineList" class="space-y-3.5">
+            <!-- Dynamically rendered medicine cards -->
+        </section>
+
+        <!-- Empty State (Shown when 0 medicines) -->
+        <div id="emptyState" class="hidden bg-white rounded-3xl border border-dashed border-slate-300 p-8 text-center space-y-3">
+            <div class="w-14 h-14 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center mx-auto text-2xl">
+                <i class="fa-solid fa-prescription-bottle-medical"></i>
+            </div>
+            <h3 class="text-base font-bold text-slate-900">No Medicines Tracked Yet</h3>
+            <p class="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
+                Add your daily medications, current tablet count, and low-stock alert threshold. We'll remind you every hour when it's time to reorder.
+            </p>
+            <div class="pt-2">
+                <button onclick="openMedicineModal()" class="px-5 py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold shadow-md shadow-teal-600/20 transition active:scale-95">
+                    <i class="fa-solid fa-plus mr-1.5"></i> Add First Medicine
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Floating Bottom Add Button for Easy One-Handed iPhone Reach -->
+    <div class="fixed bottom-5 right-5 z-20 sm:hidden">
+        <button onclick="openMedicineModal()" aria-label="Add Medicine" class="w-14 h-14 rounded-full bg-teal-600 text-white shadow-xl shadow-teal-600/30 flex items-center justify-center text-xl active:scale-90 transition">
+            <i class="fa-solid fa-plus"></i>
+        </button>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- PERSISTENT HOURLY LOW-STOCK POP-UP MODAL ("ACTION REQUIRED")          -->
+    <!-- ===================================================================== -->
+    <div id="urgentRefillModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-end sm:items-center justify-center p-3 sm:p-4">
+        <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl border-2 border-red-500 overflow-hidden animate-[fadeIn_0.2s_ease-out]">
+            <!-- Urgent Red Header -->
+            <div class="bg-gradient-to-r from-red-600 to-rose-600 px-5 py-4 text-white flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-bell text-xl"></i>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-extrabold uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded">Hourly Pharmacy Reminder</span>
+                        <h2 class="text-lg font-extrabold leading-tight mt-0.5">Order Medicines Now</h2>
+                    </div>
+                </div>
+                <button onclick="snoozeHourlyAlert()" title="Snooze for 1 Hour" class="w-9 h-9 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Body listing all unacknowledged low-stock medicines -->
+            <div class="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    The following medicine(s) are near completion. This reminder will <strong class="text-slate-900">repeat every hour</strong> until you mark each item as <strong class="text-teal-700">Ordered / Done</strong> or restock tablets.
+                </p>
+
+                <div id="urgentMedsList" class="space-y-3">
+                    <!-- Populated dynamically with urgent items -->
+                </div>
+
+                <!-- Footer Controls -->
+                <div class="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+                    <button onclick="snoozeHourlyAlert()" class="w-full sm:w-auto px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-2 transition">
+                        <i class="fa-regular fa-clock"></i>
+                        <span>Snooze 1 Hour</span>
+                    </button>
+
+                    <button onclick="markAllUrgentAsOrdered()" class="w-full sm:w-auto px-5 py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-teal-600/20 transition">
+                        <i class="fa-solid fa-check-double"></i>
+                        <span>Mark All Ordered / Done</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- ADD / EDIT MEDICINE MODAL                                             -->
+    <!-- ===================================================================== -->
+    <div id="medicineModal" class="hidden fixed inset-0 z-40 modal-backdrop flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div class="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+            <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+                <h2 id="medModalTitle" class="text-base font-extrabold text-slate-900">Add Medicine</h2>
+                <button onclick="closeMedicineModal()" class="w-9 h-9 rounded-xl bg-slate-200/70 hover:bg-slate-300 text-slate-600 flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="medicineForm" onsubmit="saveMedicine(event)" class="p-5 space-y-4 overflow-y-auto">
+                <input type="hidden" id="medId">
+
+                <!-- Medicine Name -->
+                <div>
+                    <label for="medName" class="block text-xs font-bold text-slate-700 mb-1.5">Medicine Name & Strength *</label>
+                    <input type="text" id="medName" required placeholder="e.g., Atorvastatin 10mg" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none text-sm font-medium">
+                </div>
+
+                <!-- Dose per intake & Doses per day -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label for="medDosePerIntake" class="block text-xs font-bold text-slate-700 mb-1.5">Tablets per Dose *</label>
+                        <input type="number" id="medDosePerIntake" step="0.25" min="0.25" required value="1" oninput="updateFormPreview()" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none text-sm font-semibold">
+                    </div>
+                    <div>
+                        <label for="medDosesPerDay" class="block text-xs font-bold text-slate-700 mb-1.5">Doses per Day *</label>
+                        <input type="number" id="medDosesPerDay" step="0.5" min="0.5" required value="1" oninput="updateFormPreview()" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none text-sm font-semibold">
+                    </div>
+                </div>
+
+                <!-- Current Stock -->
+                <div>
+                    <label for="medStock" class="block text-xs font-bold text-slate-700 mb-1.5">Current Tablets in Stock *</label>
+                    <input type="number" id="medStock" step="0.25" min="0" required placeholder="e.g., 30" oninput="updateFormPreview()" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none text-sm font-semibold">
+                </div>
+
+                <!-- Low-Stock Threshold Type & Value -->
+                <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold text-slate-800">Remind Me to Order When:</label>
+                        <span id="formCalculationBadge" class="text-[11px] font-semibold text-teal-700 bg-teal-100 px-2 py-0.5 rounded-md">Est. 0 days left</span>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" id="threshTypeTabletsBtn" onclick="setThresholdType('tablets')" class="py-2 px-3 rounded-xl text-xs font-bold border transition text-center">
+                            Tablets Left &le; X
+                        </button>
+                        <button type="button" id="threshTypeDaysBtn" onclick="setThresholdType('days')" class="py-2 px-3 rounded-xl text-xs font-bold border transition text-center">
+                            Days Supply &le; X
+                        </button>
+                    </div>
+                    <input type="hidden" id="medThresholdType" value="tablets">
+
+                    <div>
+                        <label id="medThresholdLabel" for="medThresholdValue" class="block text-xs font-medium text-slate-600 mb-1">Alert when remaining tablets are at or below:</label>
+                        <input type="number" id="medThresholdValue" step="0.5" min="0.5" required value="5" oninput="updateFormPreview()" class="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-300 focus:border-teal-500 outline-none text-sm font-bold">
+                    </div>
+                </div>
+
+                <!-- Auto-Deduct Toggle per Medicine -->
+                <label class="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200 bg-white cursor-pointer">
+                    <div class="pr-3">
+                        <div class="text-xs font-bold text-slate-800">Automatic Daily Deduction</div>
+                        <div class="text-[11px] text-slate-500">Automatically deduct daily usage every 24h in addition to manual "Take Dose" taps.</div>
+                    </div>
+                    <input type="checkbox" id="medAutoDeduct" checked class="w-5 h-5 accent-teal-600 rounded">
+                </label>
+
+                <!-- Submit Actions -->
+                <div class="pt-2 flex items-center gap-2.5">
+                    <button type="button" onclick="closeMedicineModal()" class="w-1/3 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition">
+                        Cancel
+                    </button>
+                    <button type="submit" class="w-2/3 py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm shadow-md shadow-teal-600/20 transition">
+                        Save Medicine
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- RESTOCK / ADD TABLETS MODAL                                           -->
+    <!-- ===================================================================== -->
+    <div id="restockModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 class="text-base font-extrabold text-slate-900">Restock Medicine</h3>
+                <button onclick="closeRestockModal()" class="w-8 h-8 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <form onsubmit="confirmRestock(event)" class="p-5 space-y-4">
+                <input type="hidden" id="restockMedId">
+                <div>
+                    <div id="restockMedName" class="text-sm font-bold text-teal-700">Medicine Name</div>
+                    <div id="restockCurrentStock" class="text-xs text-slate-500 mt-0.5">Current stock: 0 tablets</div>
+                </div>
+
+                <div>
+                    <label for="restockAmount" class="block text-xs font-bold text-slate-700 mb-1.5">Tablets Purchased / Added *</label>
+                    <input type="number" id="restockAmount" step="0.5" min="0.5" required value="30" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-teal-500 outline-none text-base font-bold">
+                    <div class="flex gap-2 mt-2">
+                        <button type="button" onclick="setRestockPreset(10)" class="flex-1 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700">+10</button>
+                        <button type="button" onclick="setRestockPreset(15)" class="flex-1 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700">+15</button>
+                        <button type="button" onclick="setRestockPreset(30)" class="flex-1 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700">+30</button>
+                        <button type="button" onclick="setRestockPreset(60)" class="flex-1 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700">+60</button>
+                    </div>
+                </div>
+
+                <div class="flex gap-2 pt-1">
+                    <button type="button" onclick="closeRestockModal()" class="w-1/3 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs">Cancel</button>
+                    <button type="submit" class="w-2/3 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md shadow-teal-600/20">Add to Stock</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- ACTIVITY LOG MODAL (With Undo Support)                                -->
+    <!-- ===================================================================== -->
+    <div id="activityModal" class="hidden fixed inset-0 z-40 modal-backdrop flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div class="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+            <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+                <div>
+                    <h2 class="text-base font-extrabold text-slate-900">Intake & Stock History</h2>
+                    <p class="text-[11px] text-slate-500">Recent manual doses, auto-deductions & refills</p>
+                </div>
+                <button onclick="closeActivityLogModal()" class="w-9 h-9 rounded-xl bg-slate-200/70 text-slate-600 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="activityLogList" class="p-4 space-y-2.5 overflow-y-auto flex-1">
+                <!-- Populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- SETTINGS, iOS GUIDE & JSON BACKUP MODAL                               -->
+    <!-- ===================================================================== -->
+    <div id="settingsModal" class="hidden fixed inset-0 z-40 modal-backdrop flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div class="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+                <h2 class="text-base font-extrabold text-slate-900">Settings & Backup</h2>
+                <button onclick="closeSettingsModal()" class="w-9 h-9 rounded-xl bg-slate-200/70 text-slate-600 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="p-5 space-y-5 overflow-y-auto">
+                <!-- Sound Chime Setting -->
+                <label class="flex items-center justify-between p-3.5 rounded-2xl border border-slate-200 bg-white cursor-pointer">
+                    <div class="pr-3">
+                        <div class="text-xs font-bold text-slate-800">Alert Sound Chime</div>
+                        <div class="text-[11px] text-slate-500">Play a gentle chime when the hourly low-stock reminder triggers in-app.</div>
+                    </div>
+                    <input type="checkbox" id="settingSoundToggle" onchange="toggleSoundSetting()" class="w-5 h-5 accent-teal-600 rounded">
+                </label>
+
+                <!-- Notification Permission Card -->
+                <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-800">Browser / iOS Notification Status</span>
+                        <span id="settingsNotifBadge" class="text-[11px] font-bold px-2 py-0.5 rounded-md bg-slate-200 text-slate-700">Checking...</span>
+                    </div>
+                    <p class="text-[11px] text-slate-600 leading-relaxed">
+                        On iPhone, add this page to your <strong>Home Screen</strong> via Safari's Share button first, then tap below to allow notifications.
+                    </p>
+                    <div class="flex gap-2">
+                        <button onclick="requestBrowserNotifications()" class="flex-1 py-2.5 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition">
+                            Request Permission
+                        </button>
+                        <button onclick="triggerTestAlert()" class="py-2.5 px-3 rounded-xl bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold transition">
+                            Test Now
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Data Backup (JSON Export / Import) -->
+                <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                    <div>
+                        <h3 class="text-xs font-bold text-slate-800">Local Device Backup (No Login Needed)</h3>
+                        <p class="text-[11px] text-slate-500 mt-0.5">Your data is stored privately on this device. Export a backup file anytime.</p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <button onclick="exportDataJson()" class="py-2.5 px-3 rounded-xl bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-bold flex items-center justify-center gap-1.5 transition">
+                            <i class="fa-solid fa-download text-teal-600"></i>
+                            <span>Export Backup</span>
+                        </button>
+                        <label class="py-2.5 px-3 rounded-xl bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer">
+                            <i class="fa-solid fa-upload text-indigo-600"></i>
+                            <span>Import Backup</span>
+                            <input type="file" accept=".json" onchange="importDataJson(event)" class="hidden">
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Force Run Daily Auto-Deduction Check -->
+                <div class="pt-1 flex items-center justify-between text-xs text-slate-500">
+                    <span id="lastAutoCheckLabel">Last daily check: Just now</span>
+                    <button onclick="runAutoDeductionEngine(true)" class="text-teal-700 font-bold hover:underline">Run Daily Check Now</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Non-Intrusive Toast Message Box (Replaces alert()) -->
+    <div id="toastContainer" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-md pointer-events-none space-y-2"></div>
+
+    <!-- ===================================================================== -->
+    <!-- APPLICATION LOGIC (LocalStorage, Auto-Deduct, Hourly Alert Engine)    -->
+    <!-- ===================================================================== -->
+    <script>
+        /**
+         * MedTrack State & Constants
+         * 1 Hour = 3,600,000 ms
+         */
+        const STORAGE_KEY = 'medtrack_state_v1';
+        const ONE_HOUR_MS = 60 * 60 * 1000;
+        const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+        let appState = {
+            medicines: [],
+            logs: [],
+            lastHourlyAlertTimestamp: 0,
+            lastAutoDeductCheck: Date.now(),
+            soundEnabled: true,
+            iosBannerDismissed: false,
+            hasSampleData: false
+        };
+
+        let hourlyCheckInterval = null;
+        let countdownInterval = null;
+
+        /**
+         * Initialize Application on Window Load
+         */
+        window.onload = function () {
+            loadState();
+            seedInitialSamplesIfFirstVisit();
+            runAutoDeductionEngine(false);
+            setupIosGuidanceBanner();
+            updateNotificationUIStatus();
+            renderAll();
+
+            // Start 1-second UI countdown & hourly alert monitor
+            startTimers();
+
+            // Check immediately on load if any unacknowledged low-stock medicine needs an alert
+            evaluateHourlyAlertTrigger(true);
+
+            // Re-evaluate immediately whenever user unlocks iPhone or switches back to Safari/PWA tab
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    runAutoDeductionEngine(false);
+                    evaluateHourlyAlertTrigger(false);
+                    updateNotificationUIStatus();
+                }
+            });
+        };
+
+        /**
+         * Load persisted state from localStorage safely
+         */
+        function loadState() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    appState = { ...appState, ...parsed };
+                }
+            } catch (err) {
+                console.error('Failed to load state from localStorage:', err);
+            }
+        }
+
+        /**
+         * Save current state to localStorage
+         */
+        function saveState() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+            } catch (err) {
+                console.error('Failed to save state to localStorage:', err);
+                showToast('Storage warning: Unable to save changes locally.', 'error');
+            }
+        }
+
+        /**
+         * Pre-populate 2 sample medicines on first visit so user can immediately experience tracking & low-stock alerts
+         */
+        function seedInitialSamplesIfFirstVisit() {
+            const initializedFlag = localStorage.getItem('medtrack_initialized');
+            if (!initializedFlag && appState.medicines.length === 0) {
+                appState.medicines = [
+                    {
+                        id: 'sample_1',
+                        name: 'Vitamin D3 2000 IU',
+                        dosePerIntake: 1,
+                        dosesPerDay: 1,
+                        stock: 24,
+                        thresholdType: 'days',
+                        thresholdValue: 5,
+                        autoDeduct: true,
+                        orderAcknowledged: false,
+                        isSample: true,
+                        createdAt: Date.now()
+                    },
+                    {
+                        id: 'sample_2',
+                        name: 'Atorvastatin 10mg',
+                        dosePerIntake: 1,
+                        dosesPerDay: 1,
+                        stock: 3, // Already at/below threshold of 5 tablets to demonstrate immediate & hourly alert!
+                        thresholdType: 'tablets',
+                        thresholdValue: 5,
+                        autoDeduct: true,
+                        orderAcknowledged: false,
+                        isSample: true,
+                        createdAt: Date.now()
+                    }
+                ];
+                appState.hasSampleData = true;
+                appState.lastAutoDeductCheck = Date.now();
+                localStorage.setItem('medtrack_initialized', 'true');
+                saveState();
+            }
+        }
+
+        /**
+         * Clear sample medicines cleanly
+         */
+        function clearSampleData() {
+            appState.medicines = appState.medicines.filter(m => !m.isSample);
+            appState.hasSampleData = false;
+            saveState();
+            renderAll();
+            showToast('Sample medicines cleared.', 'success');
+        }
+
+        /**
+         * Determine if a medicine is currently low on stock based on its custom threshold
+         */
+        function isMedicineLowStock(med) {
+            const dailyConsumption = med.dosePerIntake * med.dosesPerDay;
+            const daysRemaining = dailyConsumption > 0 ? (med.stock / dailyConsumption) : 999;
+
+            if (med.thresholdType === 'days') {
+                return daysRemaining <= med.thresholdValue;
+            } else {
+                return med.stock <= med.thresholdValue;
+            }
+        }
+
+        /**
+         * Get all medicines that are low on stock AND not yet marked "Ordered / Done"
+         */
+        function getUnacknowledgedLowMedicines() {
+            return appState.medicines.filter(med => isMedicineLowStock(med) && !med.orderAcknowledged);
+        }
+
+        /**
+         * Hybrid Stock Deduction Engine: Automatic Daily Deduction
+         * Checks elapsed 24h periods since last check and deducts daily doses for medicines with autoDeduct enabled.
+         */
+        function runAutoDeductionEngine(manualTrigger = false) {
+            const now = Date.now();
+            const lastCheck = appState.lastAutoDeductCheck || now;
+            const elapsedMs = now - lastCheck;
+            const elapsedDays = Math.floor(elapsedMs / ONE_DAY_MS);
+
+            if (elapsedDays >= 1) {
+                let totalAutoDeductedCount = 0;
+
+                appState.medicines.forEach(med => {
+                    if (med.autoDeduct && med.stock > 0) {
+                        const dailyUse = med.dosePerIntake * med.dosesPerDay;
+                        const totalToDeduct = Math.min(med.stock, dailyUse * elapsedDays);
+
+                        if (totalToDeduct > 0) {
+                            const wasLowBefore = isMedicineLowStock(med);
+                            med.stock = Math.max(0, Number((med.stock - totalToDeduct).toFixed(2)));
+                            const isLowNow = isMedicineLowStock(med);
+
+                            // If medicine newly crossed into low-stock territory, reset orderAcknowledged so alerts trigger
+                            if (!wasLowBefore && isLowNow) {
+                                med.orderAcknowledged = false;
+                            }
+
+                            addActivityLog({
+                                medId: med.id,
+                                medName: med.name,
+                                type: 'auto',
+                                delta: -totalToDeduct,
+                                note: `Auto-deducted for ${elapsedDays} day(s)`
+                            });
+                            totalAutoDeductedCount++;
+                        }
+                    }
+                });
+
+                // Advance lastAutoDeductCheck by exact number of elapsed days to preserve time alignment
+                appState.lastAutoDeductCheck = lastCheck + (elapsedDays * ONE_DAY_MS);
+                saveState();
+                renderAll();
+
+                if (totalAutoDeductedCount > 0) {
+                    showToast(`Auto-deducted daily doses for ${totalAutoDeductedCount} medicine(s).`, 'info');
+                    evaluateHourlyAlertTrigger(true);
+                }
+            } else if (manualTrigger) {
+                showToast('Daily doses are already up to date for today.', 'info');
+            }
+        }
+
+        /**
+         * Manual "Take Dose" button handler
+         */
+        function takeManualDose(medId) {
+            const med = appState.medicines.find(m => m.id === medId);
+            if (!med) return;
+
+            if (med.stock <= 0) {
+                showToast(`${med.name} is out of stock (0 tablets). Tap + Restock.`, 'error');
+                return;
+            }
+
+            const wasLowBefore = isMedicineLowStock(med);
+            const deducted = Math.min(med.stock, med.dosePerIntake);
+            med.stock = Math.max(0, Number((med.stock - deducted).toFixed(2)));
+            const isLowNow = isMedicineLowStock(med);
+
+            // If newly dropped to or below threshold, ensure orderAcknowledged is false
+            if (!wasLowBefore && isLowNow) {
+                med.orderAcknowledged = false;
+            }
+
+            addActivityLog({
+                medId: med.id,
+                medName: med.name,
+                type: 'manual',
+                delta: -deducted,
+                note: 'Manual dose taken'
+            });
+
+            saveState();
+            renderAll();
+            showToast(`Took ${deducted} tab of ${med.name}. (${med.stock} left)`, 'success');
+
+            // If low stock and unacknowledged, trigger reminder immediately!
+            if (isLowNow && !med.orderAcknowledged) {
+                evaluateHourlyAlertTrigger(true);
+            }
+        }
+
+        /**
+         * Add an entry to the activity log (supports Undo)
+         */
+        function addActivityLog({ medId, medName, type, delta, note }) {
+            appState.logs.unshift({
+                id: 'log_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                medId,
+                medName,
+                type, // 'manual' | 'auto' | 'restock'
+                delta,
+                note,
+                timestamp: Date.now(),
+                undone: false
+            });
+            // Keep latest 60 logs
+            if (appState.logs.length > 60) {
+                appState.logs = appState.logs.slice(0, 60);
+            }
+        }
+
+        /**
+         * Undo a logged stock change
+         */
+        function undoLogEntry(logId) {
+            const entry = appState.logs.find(l => l.id === logId);
+            if (!entry || entry.undone) return;
+
+            const med = appState.medicines.find(m => m.id === entry.medId);
+            if (med) {
+                med.stock = Math.max(0, Number((med.stock - entry.delta).toFixed(2)));
+                if (!isMedicineLowStock(med)) {
+                    med.orderAcknowledged = false;
+                }
+            }
+
+            entry.undone = true;
+            saveState();
+            renderAll();
+            renderActivityLog();
+            showToast(`Undid action for ${entry.medName}.`, 'info');
+        }
+
+        /**
+         * ===================================================================
+         * PERSISTENT HOURLY REMINDER & BROWSER NOTIFICATION SYSTEM
+         * ===================================================================
+         */
+        function startTimers() {
+            if (hourlyCheckInterval) clearInterval(hourlyCheckInterval);
+            if (countdownInterval) clearInterval(countdownInterval);
+
+            // Check every 15 seconds if 1 full hour (3,600,000 ms) has elapsed since last alert
+            hourlyCheckInterval = setInterval(() => {
+                evaluateHourlyAlertTrigger(false);
+            }, 15000);
+
+            // Update visual countdown timer every 1 second
+            countdownInterval = setInterval(() => {
+                updateCountdownUI();
+            }, 1000);
+        }
+
+        /**
+         * Core Hourly Reminder Evaluator
+         * @param {boolean} forceImmediate - True when stock just breached threshold or app just opened
+         */
+        function evaluateHourlyAlertTrigger(forceImmediate = false) {
+            const urgentMeds = getUnacknowledgedLowMedicines();
+            if (urgentMeds.length === 0) {
+                hideUrgentRefillModal();
+                return;
+            }
+
+            const now = Date.now();
+            const elapsedSinceLastAlert = now - (appState.lastHourlyAlertTimestamp || 0);
+
+            if (forceImmediate || elapsedSinceLastAlert >= ONE_HOUR_MS) {
+                appState.lastHourlyAlertTimestamp = now;
+                saveState();
+
+                // 1. Show prominent in-app persistent pop-up modal
+                showUrgentRefillModal(false);
+
+                // 2. Fire OS / iOS Safari Web Push Notification if granted
+                fireSystemBrowserNotification(urgentMeds);
+
+                // 3. Play gentle alert chime if enabled
+                if (appState.soundEnabled) {
+                    playGentleChime();
+                }
+            }
+        }
+
+        /**
+         * Fire standard Web Notification API alert (works on iOS 16.4+ / iOS 27 Home Screen Web Apps & desktop browsers)
+         */
+        function fireSystemBrowserNotification(urgentMeds) {
+            if (!('Notification' in window)) return;
+            if (Notification.permission !== 'granted') return;
+
+            const names = urgentMeds.map(m => `${m.name} (${m.stock} left)`).join(', ');
+            const title = urgentMeds.length === 1
+                ? `Refill Needed: ${urgentMeds[0].name}`
+                : `Order ${urgentMeds.length} Medicines from Pharmacy`;
+
+            const options = {
+                body: `Running low: ${names}. Tap to review or mark as Ordered.`,
+                tag: 'medtrack-hourly-refill', // Replaces older notification cleanly while alerting again
+                renotify: true,
+                requireInteraction: true
+            };
+
+            try {
+                const notif = new Notification(title, options);
+                notif.onclick = function () {
+                    window.focus();
+                    showUrgentRefillModal(true);
+                    notif.close();
+                };
+            } catch (e) {
+                console.warn('Browser notification trigger failed:', e);
+            }
+        }
+
+        /**
+         * Request Web Notification permission on user tap
+         */
+        async function requestBrowserNotifications() {
+            if (!('Notification' in window)) {
+                showToast('On iPhone, tap Share → "Add to Home Screen" first to enable notifications.', 'info');
+                document.getElementById('iosGuideBanner').classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const permission = await Notification.requestPermission();
+                updateNotificationUIStatus();
+
+                if (permission === 'granted') {
+                    showToast('Notifications enabled! You will receive hourly alerts when stock is low.', 'success');
+                    new Notification('MedTrack Alerts Active', {
+                        body: 'You will be reminded every hour when any medicine is near completion.'
+                    });
+                } else if (permission === 'denied') {
+                    showToast('Notifications blocked. Please enable them in iPhone Settings → Notifications.', 'error');
+                }
+            } catch (err) {
+                console.error('Notification permission error:', err);
+                showToast('Could not request notification permission. Ensure app is added to Home Screen on iOS.', 'info');
+            }
+        }
+
+        /**
+         * Update header & settings badges reflecting current Notification permission
+         */
+        function updateNotificationUIStatus() {
+            const btn = document.getElementById('notifHeaderBtn');
+            const icon = document.getElementById('notifHeaderIcon');
+            const text = document.getElementById('notifHeaderText');
+            const settingsBadge = document.getElementById('settingsNotifBadge');
+
+            if (!('Notification' in window)) {
+                btn.className = 'flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all border shadow-sm bg-amber-50 text-amber-800 border-amber-200';
+                icon.className = 'fa-solid fa-mobile-screen-button';
+                text.textContent = 'iOS Setup';
+                if (settingsBadge) settingsBadge.textContent = 'Add to Home Screen';
+                return;
+            }
+
+            const perm = Notification.permission;
+            if (perm === 'granted') {
+                btn.className = 'flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all border shadow-sm bg-teal-50 text-teal-800 border-teal-200';
+                icon.className = 'fa-solid fa-bell text-teal-600';
+                text.textContent = 'Alerts On';
+                if (settingsBadge) {
+                    settingsBadge.textContent = 'Granted';
+                    settingsBadge.className = 'text-[11px] font-bold px-2 py-0.5 rounded-md bg-teal-100 text-teal-800';
+                }
+            } else if (perm === 'denied') {
+                btn.className = 'flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all border shadow-sm bg-red-50 text-red-700 border-red-200';
+                icon.className = 'fa-solid fa-bell-slash text-red-600';
+                text.textContent = 'Blocked';
+                if (settingsBadge) {
+                    settingsBadge.textContent = 'Blocked in OS Settings';
+                    settingsBadge.className = 'text-[11px] font-bold px-2 py-0.5 rounded-md bg-red-100 text-red-700';
+                }
+            } else {
+                btn.className = 'flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all border shadow-sm bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700';
+                icon.className = 'fa-solid fa-bell';
+                text.textContent = 'Enable Alerts';
+                if (settingsBadge) {
+                    settingsBadge.textContent = 'Not Enabled Yet';
+                    settingsBadge.className = 'text-[11px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800';
+                }
+            }
+        }
+
+        /**
+         * Test Notification & Pop-up Alert immediately
+         */
+        function triggerTestAlert() {
+            const urgentMeds = getUnacknowledgedLowMedicines();
+            const sampleList = urgentMeds.length > 0 ? urgentMeds : [{
+                id: 'test_med',
+                name: 'Sample Medicine (Test)',
+                stock: 2,
+                dosePerIntake: 1,
+                dosesPerDay: 1,
+                thresholdType: 'tablets',
+                thresholdValue: 5,
+                isTestPlaceholder: true
+            }];
+
+            if (appState.soundEnabled) {
+                playGentleChime();
+            }
+
+            if ('Notification' in window && Notification.permission === 'granted') {
+                fireSystemBrowserNotification(sampleList);
+            } else {
+                showToast('Showing in-app alert preview (tap "Enable Alerts" for OS push notifications).', 'info');
+            }
+
+            renderUrgentModalItems(sampleList);
+            document.getElementById('urgentRefillModal').classList.remove('hidden');
+        }
+
+        /**
+         * Web Audio API gentle two-tone chime (no external MP3 dependencies)
+         */
+        function playGentleChime() {
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtx) return;
+                const ctx = new AudioCtx();
+                const now = ctx.currentTime;
+
+                [587.33, 880].forEach((freq, idx) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.16);
+                    gain.gain.setValueAtTime(0.001, now + idx * 0.16);
+                    gain.gain.exponentialRampToValueAtTime(0.15, now + idx * 0.16 + 0.03);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.16 + 0.45);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now + idx * 0.16);
+                    osc.stop(now + idx * 0.16 + 0.5);
+                });
+            } catch (e) {
+                // Ignore audio autoplay block if user hasn't interacted yet
+            }
+        }
+
+        /**
+         * Show Persistent Hourly Low-Stock Modal
+         */
+        function showUrgentRefillModal(manualOpen = false) {
+            const urgentMeds = getUnacknowledgedLowMedicines();
+            if (urgentMeds.length === 0) {
+                if (manualOpen) showToast('All medicines have healthy stock or are marked Ordered!', 'success');
+                return;
+            }
+            renderUrgentModalItems(urgentMeds);
+            document.getElementById('urgentRefillModal').classList.remove('hidden');
+        }
+
+        function hideUrgentRefillModal() {
+            document.getElementById('urgentRefillModal').classList.add('hidden');
+        }
+
+        function renderUrgentModalItems(medList) {
+            const container = document.getElementById('urgentMedsList');
+            container.innerHTML = medList.map(med => {
+                const dailyUse = med.dosePerIntake * med.dosesPerDay;
+                const daysLeft = dailyUse > 0 ? Math.floor(med.stock / dailyUse) : '∞';
+                const isTest = med.isTestPlaceholder;
+
+                return `
+                    <div class="p-3.5 rounded-2xl bg-red-50/80 border border-red-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-extrabold text-sm text-slate-900">${escapeHtml(med.name)}</span>
+                                <span class="text-[11px] font-bold px-2 py-0.5 rounded-md bg-red-100 text-red-700">
+                                    ${med.stock} left (~${daysLeft}d)
+                                </span>
+                            </div>
+                            <p class="text-xs text-slate-600 mt-0.5">
+                                Usage: ${med.dosePerIntake} tab × ${med.dosesPerDay}/day • Alert threshold: &le; ${med.thresholdValue} ${med.thresholdType}
+                            </p>
+                        </div>
+
+                        <div class="flex items-center gap-2 shrink-0">
+                            ${isTest ? `
+                                <button onclick="hideUrgentRefillModal()" class="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-teal-600 text-white text-xs font-bold">
+                                    Close Test
+                                </button>
+                            ` : `
+                                <button onclick="openRestockModal('${med.id}')" class="px-3 py-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 text-xs font-bold transition">
+                                    + Restock
+                                </button>
+                                <button onclick="markMedicineAsOrdered('${med.id}')" class="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-sm transition">
+                                    <i class="fa-solid fa-check mr-1"></i>Ordered / Done
+                                </button>
+                            `}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        /**
+         * Mark a single medicine as "Ordered / Done" — stops hourly reminders for this low-stock cycle
+         */
+        function markMedicineAsOrdered(medId) {
+            const med = appState.medicines.find(m => m.id === medId);
+            if (!med) return;
+
+            med.orderAcknowledged = true;
+            saveState();
+            renderAll();
+
+            const remaining = getUnacknowledgedLowMedicines();
+            if (remaining.length === 0) {
+                hideUrgentRefillModal();
+                showToast(`${med.name} marked Ordered! Hourly alerts paused.`, 'success');
+            } else {
+                renderUrgentModalItems(remaining);
+                showToast(`${med.name} marked Ordered.`, 'success');
+            }
+        }
+
+        /**
+         * Mark ALL currently low-stock medicines as "Ordered / Done"
+         */
+        function markAllUrgentAsOrdered() {
+            const urgentMeds = getUnacknowledgedLowMedicines();
+            urgentMeds.forEach(med => {
+                med.orderAcknowledged = true;
+            });
+            saveState();
+            renderAll();
+            hideUrgentRefillModal();
+            showToast('All low-stock medicines marked Ordered / Done!', 'success');
+        }
+
+        /**
+         * Snooze the pop-up modal for 1 hour (resets the 1-hour timer from right now)
+         */
+        function snoozeHourlyAlert() {
+            appState.lastHourlyAlertTimestamp = Date.now();
+            saveState();
+            hideUrgentRefillModal();
+            updateCountdownUI();
+            showToast('Reminder snoozed. It will pop up again in 1 hour.', 'info');
+        }
+
+        /**
+         * Update Live Countdown Timer in Dashboard & Urgent Strip
+         */
+        function updateCountdownUI() {
+            const urgentMeds = getUnacknowledgedLowMedicines();
+            const statTimerEl = document.getElementById('statTimer');
+            const stripCountdownEl = document.getElementById('stripCountdown');
+
+            if (urgentMeds.length === 0) {
+                statTimerEl.textContent = 'Idle';
+                statTimerEl.className = 'text-lg sm:text-xl font-extrabold text-slate-400';
+                return;
+            }
+
+            const nextTriggerAt = (appState.lastHourlyAlertTimestamp || Date.now()) + ONE_HOUR_MS;
+            const remainingMs = Math.max(0, nextTriggerAt - Date.now());
+            const totalSeconds = Math.floor(remainingMs / 1000);
+            const mins = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+            const secs = String(totalSeconds % 60).padStart(2, '0');
+
+            statTimerEl.textContent = `${mins}:${secs}`;
+            statTimerEl.className = 'text-lg sm:text-xl font-extrabold text-red-600 tabular-nums';
+            if (stripCountdownEl) {
+                stripCountdownEl.textContent = `Next pop-up in ${mins}m ${secs}s`;
+            }
+        }
+
+        /**
+         * ===================================================================
+         * ADD / EDIT / DELETE / RESTOCK MEDICINE HANDLERS
+         * ===================================================================
+         */
+        function openMedicineModal(medId = null) {
+            const form = document.getElementById('medicineForm');
+            form.reset();
+            document.getElementById('medId').value = '';
+
+            if (medId) {
+                const med = appState.medicines.find(m => m.id === medId);
+                if (!med) return;
+                document.getElementById('medModalTitle').textContent = 'Edit Medicine';
+                document.getElementById('medId').value = med.id;
+                document.getElementById('medName').value = med.name;
+                document.getElementById('medDosePerIntake').value = med.dosePerIntake;
+                document.getElementById('medDosesPerDay').value = med.dosesPerDay;
+                document.getElementById('medStock').value = med.stock;
+                document.getElementById('medThresholdValue').value = med.thresholdValue;
+                document.getElementById('medAutoDeduct').checked = med.autoDeduct;
+                setThresholdType(med.thresholdType);
+            } else {
+                document.getElementById('medModalTitle').textContent = 'Add New Medicine';
+                document.getElementById('medDosePerIntake').value = 1;
+                document.getElementById('medDosesPerDay').value = 1;
+                document.getElementById('medThresholdValue').value = 5;
+                document.getElementById('medAutoDeduct').checked = true;
+                setThresholdType('tablets');
+            }
+
+            updateFormPreview();
+            document.getElementById('medicineModal').classList.remove('hidden');
+        }
+
+        function closeMedicineModal() {
+            document.getElementById('medicineModal').classList.add('hidden');
+        }
+
+        function setThresholdType(type) {
+            document.getElementById('medThresholdType').value = type;
+            const tabBtn = document.getElementById('threshTypeTabletsBtn');
+            const dayBtn = document.getElementById('threshTypeDaysBtn');
+            const label = document.getElementById('medThresholdLabel');
+
+            if (type === 'tablets') {
+                tabBtn.className = 'py-2 px-3 rounded-xl text-xs font-bold border transition text-center bg-teal-600 text-white border-teal-600 shadow-sm';
+                dayBtn.className = 'py-2 px-3 rounded-xl text-xs font-bold border transition text-center bg-white text-slate-600 border-slate-300 hover:bg-slate-100';
+                label.textContent = 'Alert when remaining tablets are at or below:';
+            } else {
+                dayBtn.className = 'py-2 px-3 rounded-xl text-xs font-bold border transition text-center bg-teal-600 text-white border-teal-600 shadow-sm';
+                tabBtn.className = 'py-2 px-3 rounded-xl text-xs font-bold border transition text-center bg-white text-slate-600 border-slate-300 hover:bg-slate-100';
+                label.textContent = 'Alert when estimated days of supply left are at or below:';
+            }
+            updateFormPreview();
+        }
+
+        function updateFormPreview() {
+            const dose = parseFloat(document.getElementById('medDosePerIntake').value) || 0;
+            const freq = parseFloat(document.getElementById('medDosesPerDay').value) || 0;
+            const stock = parseFloat(document.getElementById('medStock').value) || 0;
+            const daily = dose * freq;
+            const daysLeft = daily > 0 ? Math.floor(stock / daily) : 0;
+            document.getElementById('formCalculationBadge').textContent = `Est. ${daysLeft} day(s) supply`;
+        }
+
+        function saveMedicine(event) {
+            event.preventDefault();
+            const id = document.getElementById('medId').value;
+            const name = document.getElementById('medName').value.trim();
+            const dosePerIntake = parseFloat(document.getElementById('medDosePerIntake').value);
+            const dosesPerDay = parseFloat(document.getElementById('medDosesPerDay').value);
+            const stock = parseFloat(document.getElementById('medStock').value);
+            const thresholdType = document.getElementById('medThresholdType').value;
+            const thresholdValue = parseFloat(document.getElementById('medThresholdValue').value);
+            const autoDeduct = document.getElementById('medAutoDeduct').checked;
+
+            if (!name || dosePerIntake <= 0 || dosesPerDay <= 0 || stock < 0 || thresholdValue <= 0) {
+                showToast('Please enter valid positive values for all fields.', 'error');
+                return;
+            }
+
+            if (id) {
+                const idx = appState.medicines.findIndex(m => m.id === id);
+                if (idx !== -1) {
+                    const updated = {
+                        ...appState.medicines[idx],
+                        name,
+                        dosePerIntake,
+                        dosesPerDay,
+                        stock,
+                        thresholdType,
+                        thresholdValue,
+                        autoDeduct,
+                        isSample: false
+                    };
+                    // If user increased stock above threshold, clear orderAcknowledged
+                    if (!isMedicineLowStock(updated)) {
+                        updated.orderAcknowledged = false;
+                    }
+                    appState.medicines[idx] = updated;
+                    showToast(`Updated ${name}.`, 'success');
+                }
+            } else {
+                const newMed = {
+                    id: 'med_' + Date.now(),
+                    name,
+                    dosePerIntake,
+                    dosesPerDay,
+                    stock,
+                    thresholdType,
+                    thresholdValue,
+                    autoDeduct,
+                    orderAcknowledged: false,
+                    isSample: false,
+                    createdAt: Date.now()
+                };
+                appState.medicines.unshift(newMed);
+                showToast(`Added ${name} to tracker.`, 'success');
+            }
+
+            appState.hasSampleData = appState.medicines.some(m => m.isSample);
+            saveState();
+            closeMedicineModal();
+            renderAll();
+
+            // Check if newly added/edited medicine immediately qualifies for low-stock alert
+            evaluateHourlyAlertTrigger(true);
+        }
+
+        function deleteMedicine(medId) {
+            const med = appState.medicines.find(m => m.id === medId);
+            if (!med) return;
+            appState.medicines = appState.medicines.filter(m => m.id !== medId);
+            appState.hasSampleData = appState.medicines.some(m => m.isSample);
+            saveState();
+            renderAll();
+            showToast(`Removed ${med.name}.`, 'info');
+        }
+
+        /**
+         * Restock Modal Handlers
+         */
+        function openRestockModal(medId) {
+            const med = appState.medicines.find(m => m.id === medId);
+            if (!med) return;
+            document.getElementById('restockMedId').value = med.id;
+            document.getElementById('restockMedName').textContent = med.name;
+            document.getElementById('restockCurrentStock').textContent = `Current stock: ${med.stock} tablet(s)`;
+            document.getElementById('restockAmount').value = 30;
+            document.getElementById('restockModal').classList.remove('hidden');
+        }
+
+        function closeRestockModal() {
+            document.getElementById('restockModal').classList.add('hidden');
+        }
+
+        function setRestockPreset(amount) {
+            document.getElementById('restockAmount').value = amount;
+        }
+
+        function confirmRestock(event) {
+            event.preventDefault();
+            const medId = document.getElementById('restockMedId').value;
+            const addAmount = parseFloat(document.getElementById('restockAmount').value);
+            const med = appState.medicines.find(m => m.id === medId);
+            if (!med || addAmount <= 0) return;
+
+            med.stock = Number((med.stock + addAmount).toFixed(2));
+            // Reset orderAcknowledged so future low-stock cycles trigger reminders again
+            if (!isMedicineLowStock(med)) {
+                med.orderAcknowledged = false;
+            }
+
+            addActivityLog({
+                medId: med.id,
+                medName: med.name,
+                type: 'restock',
+                delta: +addAmount,
+                note: `Restocked +${addAmount} tablets`
+            });
+
+            saveState();
+            closeRestockModal();
+            renderAll();
+
+            // Refresh or close urgent modal if open
+            const remainingUrgent = getUnacknowledgedLowMedicines();
+            if (remainingUrgent.length === 0) {
+                hideUrgentRefillModal();
+            } else if (!document.getElementById('urgentRefillModal').classList.contains('hidden')) {
+                renderUrgentModalItems(remainingUrgent);
+            }
+
+            showToast(`Added +${addAmount} tablets to ${med.name}. Total: ${med.stock}`, 'success');
+        }
+
+        /**
+         * ===================================================================
+         * RENDERING DASHBOARD & CARDS
+         * ===================================================================
+         */
+        function renderAll() {
+            renderDashboardStats();
+            renderMedicineCards();
+            updateCountdownUI();
+        }
+
+        function renderDashboardStats() {
+            const total = appState.medicines.length;
+            const urgentLow = getUnacknowledgedLowMedicines();
+
+            document.getElementById('statTotalMeds').textContent = total;
+            document.getElementById('statLowMeds').textContent = urgentLow.length;
+
+            const lowIcon = document.getElementById('statLowIcon');
+            const lowNum = document.getElementById('statLowMeds');
+            if (urgentLow.length > 0) {
+                lowNum.className = 'text-2xl font-extrabold text-red-600';
+                lowIcon.className = 'fa-solid fa-bell text-red-500 text-sm animate-bounce';
+            } else {
+                lowNum.className = 'text-2xl font-extrabold text-slate-900';
+                lowIcon.className = 'fa-solid fa-circle-check text-teal-500 text-sm';
+            }
+
+            // Toggle Active Alert Strip
+            const strip = document.getElementById('activeAlertStrip');
+            if (urgentLow.length > 0) {
+                strip.classList.remove('hidden');
+                const names = urgentLow.map(m => m.name).join(', ');
+                document.getElementById('stripAlertSummary').textContent =
+                    `${urgentLow.length} medicine(s) near completion: ${names}`;
+            } else {
+                strip.classList.add('hidden');
+            }
+
+            // Toggle Sample Data Banner
+            const sampleBanner = document.getElementById('sampleDataBanner');
+            if (appState.medicines.some(m => m.isSample)) {
+                sampleBanner.classList.remove('hidden');
+            } else {
+                sampleBanner.classList.add('hidden');
+            }
+        }
+
+        function renderMedicineCards() {
+            const container = document.getElementById('medicineList');
+            const emptyState = document.getElementById('emptyState');
+
+            if (appState.medicines.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+
+            // Sort so unacknowledged low-stock medicines always appear prominently at the top
+            const sorted = [...appState.medicines].sort((a, b) => {
+                const aUrgent = isMedicineLowStock(a) && !a.orderAcknowledged ? 1 : 0;
+                const bUrgent = isMedicineLowStock(b) && !b.orderAcknowledged ? 1 : 0;
+                if (bUrgent !== aUrgent) return bUrgent - aUrgent;
+                return (b.createdAt || 0) - (a.createdAt || 0);
+            });
+
+            container.innerHTML = sorted.map(med => {
+                const dailyUse = med.dosePerIntake * med.dosesPerDay;
+                const daysLeft = dailyUse > 0 ? Math.floor(med.stock / dailyUse) : 999;
+                const isLow = isMedicineLowStock(med);
+                const isUrgent = isLow && !med.orderAcknowledged;
+
+                // Visual progress bar scale (relative to 30-day supply or 2x threshold)
+                const referenceMax = Math.max(med.stock, dailyUse * 15, med.thresholdValue * 3, 10);
+                const pct = Math.min(100, Math.max(4, Math.round((med.stock / referenceMax) * 100)));
+
+                let barColor = 'bg-teal-500';
+                let cardBorder = 'border-slate-200/90';
+                let statusBadge = `<span class="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-teal-50 text-teal-700">In Stock</span>`;
+
+                if (isUrgent) {
+                    barColor = 'bg-red-500';
+                    cardBorder = 'border-red-400 ring-2 ring-red-500/15';
+                    statusBadge = `<span class="text-[11px] font-extrabold px-2.5 py-1 rounded-lg bg-red-100 text-red-700 flex items-center gap-1"><i class="fa-solid fa-bell"></i> Order Now</span>`;
+                } else if (isLow && med.orderAcknowledged) {
+                    barColor = 'bg-amber-500';
+                    cardBorder = 'border-amber-300';
+                    statusBadge = `<span class="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 flex items-center gap-1"><i class="fa-solid fa-check"></i> Ordered / Done</span>`;
+                }
+
+                return `
+                    <article class="bg-white rounded-3xl p-4 sm:p-5 border ${cardBorder} shadow-sm transition-all space-y-3.5">
+                        <!-- Top Row: Name, Dosage & Status Pill -->
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <h3 class="text-base font-extrabold text-slate-900">${escapeHtml(med.name)}</h3>
+                                    ${med.autoDeduct ? `<span title="Auto-deducts daily" class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">Auto-Daily</span>` : ''}
+                                </div>
+                                <p class="text-xs font-medium text-slate-500 mt-0.5">
+                                    ${med.dosePerIntake} tab × ${med.dosesPerDay}/day (${dailyUse}/day) • Alert &le; ${med.thresholdValue} ${med.thresholdType}
+                                </p>
+                            </div>
+                            <div class="shrink-0">
+                                ${statusBadge}
+                            </div>
+                        </div>
+
+                        <!-- Stock Metrics & Progress Bar -->
+                        <div class="space-y-1.5">
+                            <div class="flex items-baseline justify-between text-xs">
+                                <div>
+                                    <span class="text-xl font-extrabold ${isUrgent ? 'text-red-600' : 'text-slate-900'}">${med.stock}</span>
+                                    <span class="font-semibold text-slate-500">tablets left</span>
+                                </div>
+                                <span class="font-bold ${isUrgent ? 'text-red-600' : 'text-slate-600'}">
+                                    ~${daysLeft} day(s) supply
+                                </span>
+                            </div>
+                            <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div class="h-full ${barColor} rounded-full transition-all duration-300" style="width: ${pct}%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Urgent Refill Action Banner inside Card if Unacknowledged -->
+                        ${isUrgent ? `
+                            <div class="bg-red-50 border border-red-200 rounded-2xl p-3 flex items-center justify-between gap-2">
+                                <span class="text-xs font-bold text-red-800">Hourly reminder active until ordered.</span>
+                                <button onclick="markMedicineAsOrdered('${med.id}')" class="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shrink-0 shadow-sm transition active:scale-95">
+                                    Mark Ordered
+                                </button>
+                            </div>
+                        ` : ''}
+
+                        <!-- Action Buttons Row -->
+                        <div class="pt-1 flex items-center gap-2">
+                            <button onclick="takeManualDose('${med.id}')" class="flex-1 py-2.5 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-sm shadow-teal-600/15 transition active:scale-95">
+                                <i class="fa-solid fa-check-circle"></i>
+                                <span>Take Dose (-${med.dosePerIntake})</span>
+                            </button>
+
+                            <button onclick="openRestockModal('${med.id}')" class="py-2.5 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs sm:text-sm flex items-center justify-center gap-1 transition active:scale-95">
+                                <i class="fa-solid fa-plus text-teal-600"></i>
+                                <span>Restock</span>
+                            </button>
+
+                            <button onclick="openMedicineModal('${med.id}')" aria-label="Edit Medicine" class="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition active:scale-95">
+                                <i class="fa-solid fa-pen text-xs"></i>
+                            </button>
+
+                            <button onclick="deleteMedicine('${med.id}')" aria-label="Delete Medicine" class="w-10 h-10 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-600 flex items-center justify-center transition active:scale-95">
+                                <i class="fa-solid fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    </article>
+                `;
+            }).join('');
+        }
+
+        /**
+         * ===================================================================
+         * ACTIVITY LOG, SETTINGS, iOS DETECTION & JSON BACKUP
+         * ===================================================================
+         */
+        function openActivityLogModal() {
+            renderActivityLog();
+            document.getElementById('activityModal').classList.remove('hidden');
+        }
+
+        function closeActivityLogModal() {
+            document.getElementById('activityModal').classList.add('hidden');
+        }
+
+        function renderActivityLog() {
+            const container = document.getElementById('activityLogList');
+            if (appState.logs.length === 0) {
+                container.innerHTML = `<p class="text-xs text-slate-500 text-center py-8">No dose or refill activity recorded yet.</p>`;
+                return;
+            }
+
+            container.innerHTML = appState.logs.map(log => {
+                const dateStr = new Date(log.timestamp).toLocaleString([], {
+                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+                const isPositive = log.delta > 0;
+                const badgeClass = log.undone
+                    ? 'bg-slate-100 text-slate-400 line-through'
+                    : (isPositive ? 'bg-teal-50 text-teal-700' : 'bg-amber-50 text-amber-800');
+
+                return `
+                    <div class="p-3 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-3 ${log.undone ? 'opacity-60' : ''}">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold text-slate-900">${escapeHtml(log.medName)}</span>
+                                <span class="text-[11px] font-bold px-2 py-0.5 rounded ${badgeClass}">
+                                    ${isPositive ? '+' : ''}${log.delta} tab
+                                </span>
+                            </div>
+                            <div class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(log.note)} • ${dateStr}</div>
+                        </div>
+                        ${!log.undone ? `
+                            <button onclick="undoLogEntry('${log.id}')" class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold shrink-0">
+                                Undo
+                            </button>
+                        ` : `<span class="text-[10px] font-semibold text-slate-400">Undone</span>`}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function openSettingsModal() {
+            document.getElementById('settingSoundToggle').checked = appState.soundEnabled;
+            const lastDate = new Date(appState.lastAutoDeductCheck || Date.now()).toLocaleString([], {
+                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+            document.getElementById('lastAutoCheckLabel').textContent = `Last daily check: ${lastDate}`;
+            updateNotificationUIStatus();
+            document.getElementById('settingsModal').classList.remove('hidden');
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settingsModal').classList.add('hidden');
+        }
+
+        function toggleSoundSetting() {
+            appState.soundEnabled = document.getElementById('settingSoundToggle').checked;
+            saveState();
+            if (appState.soundEnabled) playGentleChime();
+        }
+
+        /**
+         * Detect iPhone / iPad Safari not yet running in standalone Home Screen mode
+         */
+        function setupIosGuidanceBanner() {
+            const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            const isStandalone = window.navigator.standalone === true ||
+                window.matchMedia('(display-mode: standalone)').matches;
+
+            if (isIos && !isStandalone && !appState.iosBannerDismissed) {
+                document.getElementById('iosGuideBanner').classList.remove('hidden');
+            }
+        }
+
+        function dismissIosBanner() {
+            appState.iosBannerDismissed = true;
+            saveState();
+            document.getElementById('iosGuideBanner').classList.add('hidden');
+        }
+
+        /**
+         * JSON Export & Import for Local Device Persistence
+         */
+        function exportDataJson() {
+            const dataStr = JSON.stringify(appState, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `medtrack-backup-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('Backup JSON downloaded.', 'success');
+        }
+
+        function importDataJson(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (!Array.isArray(imported.medicines)) {
+                        throw new Error('Invalid backup format');
+                    }
+                    appState = { ...appState, ...imported };
+                    saveState();
+                    renderAll();
+                    closeSettingsModal();
+                    showToast('Backup restored successfully!', 'success');
+                } catch (err) {
+                    showToast('Invalid backup file selected.', 'error');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        /**
+         * Toast Message Helper (Never uses window.alert)
+         */
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+
+            const styles = {
+                success: 'bg-slate-900 text-white border-teal-500',
+                error: 'bg-red-600 text-white border-red-400',
+                info: 'bg-slate-800 text-white border-slate-600'
+            };
+
+            const icons = {
+                success: 'fa-circle-check text-teal-400',
+                error: 'fa-circle-exclamation text-white',
+                info: 'fa-circle-info text-sky-400'
+            };
+
+            toast.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl border text-xs font-semibold transition-all duration-300 transform translate-y-0 ${styles[type] || styles.info}`;
+            toast.innerHTML = `
+                <i class="fa-solid ${icons[type] || icons.info} text-sm shrink-0"></i>
+                <span class="leading-snug">${escapeHtml(message)}</span>
+            `;
+
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(-8px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3400);
+        }
+
+        /**
+         * HTML Sanitization Helper
+         */
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+</html>
